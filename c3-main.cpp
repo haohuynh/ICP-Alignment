@@ -63,8 +63,8 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void*
 }
 
 Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose startingPose, int iterations){
- 	
-	Eigen::Matrix4d initTransform = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x, startingPose.position.y, startingPose.position.z);
+ 	// When the simulation is first started and the vehicle is stable, the pose error is already approximated to .09 (see README.md). Thus, this deltaX must be considered in the below transformation.
+	Eigen::Matrix4d initTransform = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x + .09, startingPose.position.y, startingPose.position.z);
     PointCloudT::Ptr transformSource(new PointCloudT); 
     pcl::transformPointCloud(*source, *transformSource, initTransform);
   
@@ -72,8 +72,12 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
     icp.setMaximumIterations(iterations);
     icp.setInputSource(transformSource);
     icp.setInputTarget(target);
-  
-  	PointCloudT::Ptr cloud_icp (new PointCloudT);  
+  	icp.setMaxCorrespondenceDistance(2);
+  	icp.setTransformationEpsilon(0.001);
+  	icp.setEuclideanFitnessEpsilon(0.00001);
+  	icp.setRANSACOutlierRejectionThreshold (10);
+      
+  	PointCloudT::Ptr cloud_icp(new PointCloudT);  
     icp.align (*cloud_icp);
   	
   	if (icp.hasConverged ()){
@@ -233,9 +237,9 @@ int main(){
           
 			// Find pose transform by using ICP or NDT matching
 			//pose = ....
-          	auto transform = ICP(mapCloud, cloudFiltered, pose, 9);
+          	auto transform = ICP(mapCloud, cloudFiltered, pose, 6);
 			pose = getPose(transform);	
-          
+          	          
 			// Transform scan so it aligns with ego's actual pose and render that scan
 			pcl::transformPointCloud (*cloudFiltered, *cloudTransformed, transform);
                     
