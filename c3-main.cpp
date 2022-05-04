@@ -62,6 +62,29 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void*
 	}
 }
 
+Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose startingPose, int iterations){
+ 	
+	Eigen::Matrix4d initTransform = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x, startingPose.position.y, startingPose.position.z);
+    PointCloudT::Ptr transformSource(new PointCloudT); 
+    pcl::transformPointCloud(*source, *transformSource, initTransform);
+  
+  	pcl::IterativeClosestPoint<PointT, PointT> icp;
+    icp.setMaximumIterations(iterations);
+    icp.setInputSource(transformSource);
+    icp.setInputTarget(target);
+  
+  	PointCloudT::Ptr cloud_icp (new PointCloudT);  
+    icp.align (*cloud_icp);
+  	
+  	if (icp.hasConverged ()){
+    	return icp.getFinalTransformation ().cast<double>() * initTransform;
+    }
+        
+  	cout << "ICP Convergence Issue!" << endl;
+    return Eigen::Matrix4d::Identity();
+}
+
+
 void Accuate(ControlState response, cc::Vehicle::Control& state){
 
 	if(response.t > 0){
@@ -144,6 +167,7 @@ int main(){
 
 	typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
 	typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
+  	typename pcl::PointCloud<PointT>::Ptr cloudTransformed (new pcl::PointCloud<PointT>);
 
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
 
@@ -200,16 +224,24 @@ int main(){
 		if(!new_scan){
 			
 			new_scan = true;
-			// TODO: (Filter scan using voxel filter)
-
-			// TODO: Find pose transform by using ICP or NDT matching
+			// Filter scan using voxel filter
+			pcl::VoxelGrid<PointT> vg;
+			vg.setInputCloud(scanCloud);
+			double filterRes = 0.5;
+			vg.setLeafSize(filterRes, filterRes, filterRes);
+			vg.filter(*cloudFiltered);
+          
+			// Find pose transform by using ICP or NDT matching
 			//pose = ....
-
-			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
-
+          	auto transform = ICP(mapCloud, cloudFiltered, pose, 9);
+			pose = getPose(transform);	
+          
+			// Transform scan so it aligns with ego's actual pose and render that scan
+			pcl::transformPointCloud (*cloudFiltered, *cloudTransformed, transform);
+                    
 			viewer->removePointCloud("scan");
-			// TODO: Change `scanCloud` below to your transformed scan
-			renderPointCloud(viewer, scanCloud, "scan", Color(1,0,0) );
+			// Change `scanCloud` below to your transformed scan
+			renderPointCloud(viewer, cloudTransformed, "scan", Color(1,0,0) );
 
 			viewer->removeAllShapes();
 			drawCar(pose, 1,  Color(0,1,0), 0.35, viewer);
