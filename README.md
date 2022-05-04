@@ -2,7 +2,7 @@
 
 Please see the project instructions and the code comments for further information.
 
-## First Analysis.
+## Delta X leading to Pose Error even when the vehicle has come to a standstill.
 <img src="Analysis.JPG"/>
 
 ## Final Result
