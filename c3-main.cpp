@@ -63,8 +63,8 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void*
 }
 
 Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose startingPose, int iterations){
- 	// When the simulation is first started and the vehicle is stable, the pose error is already approximated to .09 (see README.md). Thus, this deltaX must be considered in the below transformation.
-	Eigen::Matrix4d initTransform = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x + .09, startingPose.position.y, startingPose.position.z);
+ 	
+	Eigen::Matrix4d initTransform = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x, startingPose.position.y, startingPose.position.z);
     PointCloudT::Ptr transformSource(new PointCloudT); 
     pcl::transformPointCloud(*source, *transformSource, initTransform);
   
@@ -192,7 +192,7 @@ int main(){
 	
 	Pose poseRef(Point(vehicle->GetTransform().location.x, vehicle->GetTransform().location.y, vehicle->GetTransform().location.z), Rotate(vehicle->GetTransform().rotation.yaw * pi/180, vehicle->GetTransform().rotation.pitch * pi/180, vehicle->GetTransform().rotation.roll * pi/180));
 	double maxError = 0;
-
+	bool first_scan = true;
 	while (!viewer->wasStopped())
   	{
 		while(new_scan){
@@ -225,9 +225,17 @@ int main(){
 
   		viewer->spinOnce ();
 		
-		if(!new_scan){
+      	// As the suggestion in the first review: initialize the position with ground truth at the beginning of localization
+		int first_scan = 0;
+        if(!new_scan){
+              if (first_scan == 0){
+                pose.position = truePose.position;
+                pose.rotation = truePose.rotation;
+                first_scan +=1;
+            }
 			
 			new_scan = true;
+                  
 			// Filter scan using voxel filter
 			pcl::VoxelGrid<PointT> vg;
 			vg.setInputCloud(scanCloud);
